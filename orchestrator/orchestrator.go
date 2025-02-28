@@ -146,7 +146,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 
 		if o.l2ToL2MsgRelayer != nil {
 			o.log.Info("starting L2ToL2CrossDomainMessenger autorelayer") // `info` since it's explictily enabled
-			if err := o.l2ToL2MsgRelayer.Start(o.l2ToL2MsgIndexer, l2OpSimClientByChainId); err != nil {
+			if err := o.l2ToL2MsgRelayer.Start(o.l2ToL2MsgIndexer, l2OpSimClientByChainId, o.l2Chains); err != nil {
 				return fmt.Errorf("l2 to l2 message relayer failed to start: %w", err)
 			}
 		}
@@ -201,7 +201,7 @@ func (o *Orchestrator) Stop(ctx context.Context) error {
 }
 
 func (o *Orchestrator) kickOffMining(ctx context.Context) error {
-	if err := o.l1Chain.SetIntervalMining(ctx, nil, 2); err != nil {
+	if err := o.l1Chain.SetIntervalMining(ctx, nil, int64(o.config.L1Config.BlockTime)); err != nil {
 		return errors.New("failed to start interval mining on l1")
 	}
 
@@ -211,7 +211,7 @@ func (o *Orchestrator) kickOffMining(ctx context.Context) error {
 	errs := make([]error, len(o.l2Chains))
 	for i, chain := range o.L2Chains() {
 		go func(i int) {
-			if err := chain.SetIntervalMining(ctx, nil, 2); err != nil {
+			if err := chain.SetIntervalMining(ctx, nil, int64(chain.Config().BlockTime)); err != nil {
 				errs[i] = fmt.Errorf("failed to start interval mining for chain %s", chain.Config().Name)
 			}
 

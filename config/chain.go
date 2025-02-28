@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-chain-ops/devkeys"
-	registry "github.com/ethereum-optimism/superchain-registry/superchain"
 	"github.com/ethereum-optimism/supersim/genesis"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -17,6 +16,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/superchain"
+)
+
+const (
+	DefaultL1BlockTime = 12
+	DefaultL2BlockTime = 2
 )
 
 var (
@@ -40,7 +45,7 @@ type SecretsConfig struct {
 
 type L2Config struct {
 	L1ChainID     uint64
-	L1Addresses   *registry.AddressList
+	L1Addresses   *superchain.AddressesConfig
 	DependencySet []uint64
 }
 
@@ -49,6 +54,8 @@ type ChainConfig struct {
 	Host    string
 	Port    uint64
 	ChainID uint64
+
+	BlockTime uint64
 
 	GenesisJSON   []byte
 	SecretsConfig SecretsConfig
@@ -82,6 +89,20 @@ type NetworkConfig struct {
 	InteropDelay     uint64
 }
 
+type TraceCallResult struct {
+	Type    string            `json:"type"`
+	From    common.Address    `json:"from"`
+	To      common.Address    `json:"to"`
+	Value   *hexutil.Big      `json:"value"`
+	Gas     hexutil.Uint64    `json:"gas"`
+	GasUsed hexutil.Uint64    `json:"gasUsed"`
+	Input   hexutil.Bytes     `json:"input"`
+	Output  hexutil.Bytes     `json:"output"`
+	Error   string            `json:"error"`
+	Revert  string            `json:"revert"`
+	Calls   []TraceCallResult `json:"calls"`
+}
+
 type Chain interface {
 	// Properties
 	Endpoint() string
@@ -90,6 +111,7 @@ type Chain interface {
 	EthClient() *ethclient.Client
 
 	// Additional methods
+	DebugTraceCall(ctx context.Context, tx *types.Transaction) (*TraceCallResult, error)
 	SimulatedLogs(ctx context.Context, tx *types.Transaction) ([]types.Log, error)
 	SetCode(ctx context.Context, result interface{}, address common.Address, code string) error
 	SetStorageAt(ctx context.Context, result interface{}, address common.Address, storageSlot string, storageValue string) error
@@ -115,6 +137,7 @@ func GetNetworkConfig(cliConfig *CLIConfig) NetworkConfig {
 		L1Config: ChainConfig{
 			Name:              "Local",
 			ChainID:           genesis.GeneratedGenesisDeployment.L1.ChainID,
+			BlockTime:         DefaultL1BlockTime,
 			SecretsConfig:     DefaultSecretsConfig,
 			GenesisJSON:       genesis.GeneratedGenesisDeployment.L1.GenesisJSON,
 			StartingTimestamp: startingTimestamp,
@@ -130,6 +153,7 @@ func GetNetworkConfig(cliConfig *CLIConfig) NetworkConfig {
 			GenesisJSON:       genesis.GeneratedGenesisDeployment.L2s[i].GenesisJSON,
 			StartingTimestamp: startingTimestamp,
 			LogsDirectory:     cliConfig.LogsDirectory,
+			BlockTime:         DefaultL2BlockTime,
 			L2Config: &L2Config{
 				L1ChainID:     genesis.GeneratedGenesisDeployment.L1.ChainID,
 				L1Addresses:   genesis.GeneratedGenesisDeployment.L2s[i].RegistryAddressList(),
